@@ -49,6 +49,10 @@ page.addEventListener('mouseup', enableIframes);
 page.addEventListener('touchend', enableIframes);
 page.addEventListener('touchcancel', enableIframes);
 
+page.addEventListener('click',()=>{
+if($('#start-menu').hasClass('show')){
+hide_startmenu();
+
 
 // 上古代码
 document.querySelectorAll('list.focs').forEach(li => {
