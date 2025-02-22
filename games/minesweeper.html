@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>扫雷游戏</title>
+    <style>
+        /* 全局样式 */
+        body {
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #2e75b6, #1f4e79);
+            color: white;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+        }
+
+        /* 标题样式 */
+        h1 {
+            margin-top: 20px;
+            font-size: 2em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+
+        /* 游戏区域样式 */
+        #game {
+            display: grid;
+            grid-template-columns: repeat(var(--columns), 30px);
+            grid-template-rows: repeat(var(--rows), 30px);
+            gap: 2px;
+            margin-top: 20px;
+        }
+
+        /* 单个格子样式 */
+        .cell {
+            width: 30px;
+            height: 30px;
+            background-color: #f0f0f0;
+            background: linear-gradient(135deg, #f0f0f0, #d9d9d9);
+            border: 1px solid #ccc;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            user-select: none;
+            transition: background-color 0.3s;
+        }
+
+        .cell.revealed {
+            background: linear-gradient(135deg, #e0e0e0, #bdbdbd);
+            cursor: default;
+        }
+
+        .cell.mine {
+            background: linear-gradient(135deg, #ff4c4c, #cc0000);
+        }
+
+        .cell.flagged {
+            background: linear-gradient(135deg, #ffcc00, #cc9900);
+        }
+
+        /* 按钮样式 */
+        .button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            background: linear-gradient(135deg, #4caf50, #388e3c);
+            border: none;
+            color: white;
+            font-size: 1em;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+
+        .button:hover {
+            background: linear-gradient(135deg, #45a049, #2e7d32);
+        }
+
+        /* 对话框样式 */
+        #dialog {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.5em;
+            text-align: center;
+        }
+
+        #dialog.active {
+            display: flex;
+        }
+    </style>
+</head>
+<body>
+    <h1>扫雷游戏</h1>
+    <div id="game"></div>
+    <button class="button" onclick="initGame()">重新开始</button>
+    <div id="dialog"></div>
+
+    <script>
+        // 游戏参数
+        const ROWS = 10;
+        const COLS = 10;
+        const MINES = 10;
+
+        let grid = [];
+        let gameOver = false;
+
+        // 初始化游戏
+        function initGame() {
+            grid = [];
+            gameOver = false;
+            document.getElementById('dialog').classList.remove('active');
+            document.getElementById('game').innerHTML = '';
+            document.documentElement.style.setProperty('--rows', ROWS);
+            document.documentElement.style.setProperty('--columns', COLS);
+            for (let r = 0; r < ROWS; r++) {
+                let row = [];
+                for (let c = 0; c < COLS; c++) {
+                    let cell = document.createElement('div');
+                    cell.classList.add('cell');
+                    cell.dataset.row = r;
+                    cell.dataset.col = c;
+                    cell.addEventListener('click', onCellClick);
+                    cell.addEventListener('contextmenu', onCellRightClick);
+                    document.getElementById('game').appendChild(cell);
+                    row.push({
+                        revealed: false,
+                        mined: false,
+                        flagged: false,
+                        adjacent: 0
+                    });
+                }
+                grid.push(row);
+            }
+            // 随机放置地雷
+            let minesPlaced = 0;
+            while (minesPlaced < MINES) {
+                let r = Math.floor(Math.random() * ROWS);
+                let c = Math.floor(Math.random() * COLS);
+                if (!grid[r][c].mined) {
+                    grid[r][c].mined = true;
+                    minesPlaced++;
+                    // 更新相邻格子计数
+                    for (let dr = -1; dr <= 1; dr++) {
+                        for (let dc = -1; dc <= 1; dc++) {
+                            if (dr === 0 && dc === 0) continue;
+                            let nr = r + dr;
+                            let nc = c + dc;
+                            if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS) {
+                                grid[nr][nc].adjacent += 1;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 点击格子事件
+        function onCellClick(e) {
+            if (gameOver) return;
+            let cell = e.target;
+            let r = parseInt(cell.dataset.row);
+            let c = parseInt(cell.dataset.col);
+            let cellData = grid[r][c];
+            if (cellData.flagged) return;
+            if (cellData.revealed) return;
+            cellData.revealed = true;
+            cell.classList.add('revealed');
+            if (cellData.mined) {
+                cell.classList.add('mine');
+                endGame(false);
+            } else {
+                if (cellData.adjacent > 0) {
+                    cell.textContent = cellData.adjacent;
+                    cell.style.color = getNumberColor(cellData.adjacent);
+                } else {
+                    // 自动展开相邻格子
+                    for (let dr = -1; dr <= 1; dr++) {
+                        for (let dc = -1; dc <= 1; dc++) {
+                            if (dr === 0 && dc === 0) continue;
+                            let nr = r + dr;
+                            let nc = c + dc;
+                            if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS) {
+                                let neighbor = grid[nr][nc];
+                                if (!neighbor.revealed) {
+                                    onCellClick({ target: document.querySelector(`[data-row='${nr}'][data-col='${nc}']`) });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            checkWin();
+        }
+
+        // 右键点击事件
+        function onCellRightClick(e) {
+            e.preventDefault();
+            if (gameOver) return;
+            let cell = e.target;
+            let r = parseInt(cell.dataset.row);
+            let c = parseInt(cell.dataset.col);
+            let cellData = grid[r][c];
+            if (cellData.revealed) return;
+            cellData.flagged = !cellData.flagged;
+            if (cellData.flagged) {
+                cell.classList.add('flagged');
+            } else {
+                cell.classList.remove('flagged');
+            }
+        }
+
+        // 结束游戏
+        function endGame(won) {
+            gameOver = true;
+            for (let r = 0; r < ROWS; r++) {
+                for (let c = 0; c < COLS; c++) {
+                    let cell = grid[r][c];
+                    if (cell.mined) {
+                        let cellElement = document.querySelector(`[data-row='${r}'][data-col='${c}']`);
+                        cellElement.classList.add('mine');
+                    }
+                }
+            }
+            if (won) {
+                document.getElementById('dialog').textContent = '恭喜你，赢了！';
+            } else {
+                document.getElementById('dialog').textContent = '游戏结束！';
+            }
+            document.getElementById('dialog').classList.add('active');
+        }
+
+        // 检查是否胜利
+        function checkWin() {
+            for (let r = 0; r < ROWS; r++) {
+                for (let c = 0; c < COLS; c++) {
+                    let cell = grid[r][c];
+                    if (!cell.mined && !cell.revealed) {
+                        return;
+                    }
+                }
+            }
+            endGame(true);
+        }
+
+        // 获取数字颜色
+        function getNumberColor(number) {
+            switch (number) {
+                case 1:
+                    return 'blue';
+                case 2:
+                    return 'green';
+                case 3:
+                    return 'red';
+                case 4:
+                    return 'darkblue';
+                case 5:
+                    return 'brown';
+                case 6:
+                    return 'teal';
+                case 7:
+                    return 'black';
+                case 8:
+                    return 'gray';
+                default:
+                    return 'black';
+            }
+        }
+
+        // 初始化游戏
+        initGame();
+    </script>
+</body>
+</html>
